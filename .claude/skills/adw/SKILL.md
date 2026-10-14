@@ -14,10 +14,22 @@ allowed-tools: Bash, Read, Glob, Grep, Write, Edit, Agent, AskUserQuestion
 
 Esta skill **coordina** las skills del repositorio; no las sustituye. Cada fase usa la skill indicada siguiendo su `SKILL.md` al pie de la letra (si no están cargadas como comandos, leer `.claude/skills/<nombre>/SKILL.md`).
 
+## Modo `--auto`: etiquetas de la issue (obligatorio)
+
+El trigger no recuerda qué issues ha procesado: vuelve a lanzar cualquier issue abierta que conserve la etiqueta `adw`. Por eso, en `--auto`:
+
+1. **Lo primero de todo**, antes de cualquier otra acción: `gh issue edit <url> --remove-label adw --add-label adw-en-curso`. Si falla, termina sin hacer nada más.
+2. Al terminar con PR abierta: `gh issue edit <url> --remove-label adw-en-curso --add-label adw-hecho` y comenta en la issue el enlace a la PR y el resumen del plan.
+3. Si te detienes por cualquier motivo (árbol sucio, plan con decisiones abiertas, tests en rojo, permiso denegado, error): `gh issue edit <url> --remove-label adw-en-curso --add-label adw-bloqueado` y comenta el motivo concreto y qué necesitas del usuario.
+4. Nunca vuelvas a poner la etiqueta `adw`: la reactivación es decisión del usuario.
+5. No abras el navegador (`cmd //c start`) ni hagas preguntas (`AskUserQuestion`): no hay nadie delante.
+6. **No reconstruyas ni reinicies la app** (`docker compose up/down/restart`): es la instancia que usa el usuario. En `--auto` la Fase 4 se limita a la validación de CI en contenedor; indica en la PR y en la issue que la verificación manual en la app queda pendiente del usuario.
+7. Validación con el comando de contenedor Linux de la Fase 3, escrito como `env MSYS_NO_PATHCONV=1 docker run ...` (es la forma permitida en `.claude/settings.local.json`). Si un comando necesario es denegado por permisos, no busques rodeos: aplica el punto 3 indicando el comando exacto.
+
 ## Fase 0 — Encargo y rama
 
 1. Si el argumento es una URL de issue: `gh issue view <url> --json title,body,labels,comments` y úsalo como encargo literal.
-2. `git status --short --branch`. Si hay cambios sin commitear ajenos al encargo, **detente** y avisa (no los mezcles ni los descartes).
+2. `git status --short --branch`. Si hay cambios sin commitear ajenos al encargo, **detente** y avisa (no los mezcles ni los descartes). En `--auto`, aplica el punto 3 de las etiquetas.
 3. Clasifica el encargo y justifícalo en una línea:
    - **bug**: algo que debería funcionar y no funciona → `/bug`
    - **feature**: comportamiento nuevo visible → `/feature`

@@ -1,8 +1,10 @@
 # Repositorio cuyas issues debe consultar el trigger: OWNER/REPO.
-repo: ""
+repo: "alexx22collag/desarrollo-agentico-todo-03"
 label: adw
-interval_seconds: 20
+interval_seconds: 60
 
 # Invoca el workflow que hayas creado. {{issue_url}} recibe cada issue.
+# --auto: modo desatendido de /adw (cambia la etiqueta adw por adw-en-curso al
+# empezar y por adw-hecho / adw-bloqueado al terminar, para no repetir issues).
 prompt: >-
-  /adw {{issue_url}} --remote origin --base main
+  /adw {{issue_url}} --remote origin --base main --auto
