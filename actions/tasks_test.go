@@ -375,3 +375,58 @@ func (as *ActionSuite) Test_TasksCreate_Invalid_KeepsPriorityOrder() {
 	body := res.Body.String()
 	as.Less(strings.Index(body, "Tarea alta"), strings.Index(body, "Tarea baja"))
 }
+
+// El toggle optimista de app.js envía el formulario por POST con _method=PUT.
+func (as *ActionSuite) Test_TasksToggle_FormPostWithMethodOverride() {
+	task := &models.Task{Title: "Marcar desde el navegador"}
+	verrs, err := as.DB.ValidateAndCreate(task)
+	as.NoError(err)
+	as.False(verrs.HasAny())
+
+	res := as.HTML("/tasks/%s/toggle", task.ID).Post(url.Values{"_method": {"PUT"}})
+	as.Equal(303, res.Code)
+	as.NoError(as.DB.Reload(task))
+	as.True(task.Completed)
+
+	res = as.HTML("/tasks/%s/toggle", task.ID).Post(url.Values{"_method": {"PUT"}})
+	as.Equal(303, res.Code)
+	as.NoError(as.DB.Reload(task))
+	as.False(task.Completed)
+}
+
+// Un GET (lo que hacía el fetch sin opciones) no es una ruta válida y no persiste nada.
+func (as *ActionSuite) Test_TasksToggle_GetIsNotARoute() {
+	task := &models.Task{Title: "No se marca por GET"}
+	verrs, err := as.DB.ValidateAndCreate(task)
+	as.NoError(err)
+	as.False(verrs.HasAny())
+
+	res := as.HTML("/tasks/%s/toggle", task.ID).Get()
+	as.Equal(404, res.Code)
+	as.NoError(as.DB.Reload(task))
+	as.False(task.Completed)
+}
+
+func (as *ActionSuite) Test_AppJS_ToggleSubmitsFormAsPost() {
+	res := as.HTML("/assets/app.js").Get()
+	as.Equal(200, res.Code)
+
+	body := res.Body.String()
+	as.Contains(body, `method: "POST"`)
+	as.Contains(body, "new FormData(form)")
+}
+
+func (as *ActionSuite) Test_TasksIndex_ToggleFormCarriesOverrideAndToken() {
+	task := &models.Task{Title: "Con formulario de toggle"}
+	verrs, err := as.DB.ValidateAndCreate(task)
+	as.NoError(err)
+	as.False(verrs.HasAny())
+
+	res := as.HTML("/").Get()
+	as.Equal(200, res.Code)
+
+	body := res.Body.String()
+	as.Contains(body, "data-task-toggle")
+	as.Contains(body, `name="_method" value="PUT"`)
+	as.Contains(body, `name="authenticity_token"`)
+}
