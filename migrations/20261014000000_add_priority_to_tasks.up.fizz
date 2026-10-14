@@ -1,0 +1,2 @@
+add_column("tasks", "priority", "string", {"default": "media", "size": 10})
+sql("ALTER TABLE tasks ADD CONSTRAINT tasks_priority_check CHECK (priority IN ('alta', 'media', 'baja'))")

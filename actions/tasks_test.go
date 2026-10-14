@@ -3,6 +3,7 @@ package actions
 import (
 	"net/url"
 	"strings"
+	"time"
 
 	"todo/models"
 
@@ -236,4 +237,141 @@ func (as *ActionSuite) Test_TasksUpdate_NotFound() {
 func (as *ActionSuite) Test_TasksUpdate_InvalidID() {
 	res := as.HTML("/tasks/no-es-un-uuid").Put(url.Values{"title": {"Título nuevo"}})
 	as.Equal(404, res.Code)
+}
+
+func (as *ActionSuite) createTask(title, priority string, completed bool, createdAt time.Time) *models.Task {
+	task := &models.Task{Title: title, Priority: priority, Completed: completed, CreatedAt: createdAt}
+	verrs, err := as.DB.ValidateAndCreate(task)
+	as.NoError(err)
+	as.False(verrs.HasAny())
+	return task
+}
+
+func (as *ActionSuite) Test_TasksIndex_ShowsPriority() {
+	as.LoadFixture("tres tareas")
+
+	res := as.HTML("/").Get()
+	as.Equal(200, res.Code)
+
+	body := res.Body.String()
+	as.Contains(body, "task-priority-alta")
+	as.Contains(body, "task-priority-baja")
+	as.Contains(body, "task-priority-media")
+	as.Contains(body, "Alta")
+	as.Contains(body, "Baja")
+	as.Contains(body, "Media")
+	as.Contains(body, "Prioridad: ")
+}
+
+func (as *ActionSuite) Test_TasksIndex_FormDefaultsToMedium() {
+	res := as.HTML("/").Get()
+	as.Equal(200, res.Code)
+	as.Contains(res.Body.String(), `name="priority"`)
+	as.Contains(res.Body.String(), `<option value="media" selected>`)
+}
+
+func (as *ActionSuite) Test_TasksCreate_WithPriority() {
+	res := as.HTML("/tasks").Post(url.Values{"title": {"Con prioridad"}, "priority": {"alta"}})
+	as.Equal(303, res.Code)
+
+	task := &models.Task{}
+	as.NoError(as.DB.First(task))
+	as.Equal(models.PriorityHigh, task.Priority)
+}
+
+func (as *ActionSuite) Test_TasksCreate_WithoutPriority_DefaultsToMedium() {
+	res := as.HTML("/tasks").Post(url.Values{"title": {"Sin prioridad"}})
+	as.Equal(303, res.Code)
+
+	task := &models.Task{}
+	as.NoError(as.DB.First(task))
+	as.Equal(models.PriorityMedium, task.Priority)
+}
+
+func (as *ActionSuite) Test_TasksCreate_InvalidPriority() {
+	res := as.HTML("/tasks").Post(url.Values{"title": {"X"}, "priority": {"urgente"}})
+	as.Equal(422, res.Code)
+	as.Contains(res.Body.String(), "La prioridad no es válida.")
+	as.NotContains(res.Body.String(), `aria-describedby="title-error"`)
+
+	count, err := as.DB.Count(&models.Task{})
+	as.NoError(err)
+	as.Equal(0, count)
+}
+
+func (as *ActionSuite) Test_TasksEdit_PreselectsPriority() {
+	task := as.createTask("Para editar", models.PriorityLow, false, time.Time{})
+	res := as.HTML("/tasks/%s/edit", task.ID).Get()
+	as.Equal(200, res.Code)
+	as.Contains(res.Body.String(), `<option value="baja" selected>`)
+}
+
+func (as *ActionSuite) Test_TasksUpdate_ChangesPriority() {
+	task := as.createTask("Igual", models.PriorityMedium, true, time.Time{})
+	res := as.HTML("/tasks/%s", task.ID).Put(url.Values{"title": {"Igual"}, "priority": {"alta"}})
+	as.Equal(303, res.Code)
+	as.NoError(as.DB.Reload(task))
+	as.Equal(models.PriorityHigh, task.Priority)
+	as.True(task.Completed)
+}
+
+func (as *ActionSuite) Test_TasksUpdate_WithoutPriority_KeepsIt() {
+	task := as.createTask("Conserva prioridad", models.PriorityLow, false, time.Time{})
+	res := as.HTML("/tasks/%s", task.ID).Put(url.Values{"title": {"Título nuevo"}})
+	as.Equal(303, res.Code)
+	as.NoError(as.DB.Reload(task))
+	as.Equal("Título nuevo", task.Title)
+	as.Equal(models.PriorityLow, task.Priority)
+}
+
+func (as *ActionSuite) Test_TasksUpdate_InvalidPriority() {
+	task := as.createTask("Original", models.PriorityMedium, false, time.Time{})
+	res := as.HTML("/tasks/%s", task.ID).Put(url.Values{"title": {"Nuevo"}, "priority": {"urgente"}})
+	as.Equal(422, res.Code)
+	as.Contains(res.Body.String(), "La prioridad no es válida.")
+	as.NoError(as.DB.Reload(task))
+	as.Equal("Original", task.Title)
+	as.Equal(models.PriorityMedium, task.Priority)
+}
+
+func (as *ActionSuite) Test_TasksToggle_KeepsPriority() {
+	task := as.createTask("Importante", models.PriorityHigh, false, time.Time{})
+	res := as.HTML("/tasks/%s/toggle", task.ID).Put(url.Values{})
+	as.Equal(303, res.Code)
+	as.NoError(as.DB.Reload(task))
+	as.True(task.Completed)
+	as.Equal(models.PriorityHigh, task.Priority)
+}
+
+func (as *ActionSuite) Test_TasksIndex_OrdersByPriority() {
+	base := time.Now().Add(-time.Hour)
+	as.createTask("Tarea baja", models.PriorityLow, false, base)
+	as.createTask("Tarea alta antigua", models.PriorityHigh, false, base.Add(1*time.Second))
+	as.createTask("Tarea media", models.PriorityMedium, false, base.Add(2*time.Second))
+	as.createTask("Tarea alta reciente", models.PriorityHigh, true, base.Add(3*time.Second))
+
+	res := as.HTML("/").Get()
+	as.Equal(200, res.Code)
+
+	body := res.Body.String()
+	highOld := strings.Index(body, "Tarea alta antigua")
+	highNew := strings.Index(body, "Tarea alta reciente")
+	medium := strings.Index(body, "Tarea media")
+	low := strings.Index(body, "Tarea baja")
+	as.True(highOld >= 0 && highNew >= 0 && medium >= 0 && low >= 0)
+	as.Less(highOld, highNew)
+	as.Less(highNew, medium)
+	as.Less(medium, low)
+}
+
+func (as *ActionSuite) Test_TasksCreate_Invalid_KeepsPriorityOrder() {
+	base := time.Now().Add(-time.Hour)
+	as.createTask("Tarea baja", models.PriorityLow, false, base)
+	as.createTask("Tarea alta", models.PriorityHigh, false, base.Add(time.Second))
+
+	res := as.HTML("/tasks").Post(url.Values{"title": {""}})
+	as.Equal(422, res.Code)
+
+	body := res.Body.String()
+	as.Less(strings.Index(body, "Tarea alta"), strings.Index(body, "Tarea baja"))
 }

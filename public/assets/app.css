@@ -121,7 +121,7 @@ h1 {
 
 .task {
   display: grid;
-  grid-template-columns: 44px minmax(0, 1fr) auto;
+  grid-template-columns: 44px minmax(0, 1fr) auto auto;
   align-items: start;
   column-gap: 0.3rem;
   min-height: 61px;
@@ -135,6 +135,37 @@ h1 {
   padding: 0.65rem 0;
   overflow-wrap: anywhere;
   line-height: 1.55;
+}
+
+.task-priority {
+  align-self: center;
+  padding: 0.1rem 0.5rem;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1.5;
+  white-space: nowrap;
+}
+
+.task-priority-alta {
+  color: var(--color-primary);
+  background: #fdf0ee;
+  border-color: #f1c9c3;
+}
+
+.task-priority-media {
+  color: var(--color-text);
+  background: var(--color-sidebar);
+}
+
+.task-priority-baja {
+  color: var(--color-muted);
+  background: transparent;
+}
+
+.task-completed .task-priority {
+  opacity: 0.6;
 }
 
 .task-toggle-button,
@@ -245,6 +276,26 @@ h1 {
   line-height: 1;
 }
 
+select {
+  min-height: 44px;
+  padding: 0.6rem 0.75rem;
+  font: inherit;
+  color: var(--color-text);
+  background: #ffffff;
+  border: 1px solid #92928a;
+  border-radius: 6px;
+}
+
+.new-task-row select {
+  flex-shrink: 0;
+  width: auto;
+}
+
+select[aria-invalid="true"] {
+  border-color: var(--color-danger);
+  background: #fff9f7;
+}
+
 input[type="text"] {
   width: 100%;
   min-width: 0;
@@ -307,7 +358,8 @@ input[aria-invalid="true"] {
 
 a:focus-visible,
 button:focus-visible,
-input:focus-visible {
+input:focus-visible,
+select:focus-visible {
   outline: 3px solid var(--color-focus);
   outline-offset: 3px;
 }
@@ -367,6 +419,10 @@ input:focus-visible {
   margin-bottom: 0.5rem;
   font-size: 0.85rem;
   font-weight: 600;
+}
+
+.edit-task label[for="task-priority"] {
+  margin-top: 1.25rem;
 }
 
 .edit-task-actions {
@@ -434,7 +490,7 @@ input:focus-visible {
   }
 
   .task {
-    grid-template-columns: 36px minmax(0, 1fr) auto;
+    grid-template-columns: 36px minmax(0, 1fr) auto auto;
   }
 
   .task-toggle-button,
