@@ -35,9 +35,9 @@ func TasksCreate(c buffalo.Context) error {
 	}
 	task.Title = strings.TrimSpace(task.Title)
 
-	view, _, ok := parseView(c.Param("view"))
-	if !ok {
-		view = ""
+	view, err := viewOrAll(tx, c.Param("view"))
+	if err != nil {
+		return err
 	}
 
 	moduleID, ok := parseModuleParam(c.Param("module_id"))
@@ -70,9 +70,9 @@ func TasksEdit(c buffalo.Context) error {
 		return c.Error(http.StatusNotFound, err)
 	}
 
-	view, _, ok := parseView(c.Param("view"))
-	if !ok {
-		view = ""
+	view, err := viewOrAll(tx, c.Param("view"))
+	if err != nil {
+		return err
 	}
 
 	if err := setLayout(c, tx, view); err != nil {
@@ -103,9 +103,9 @@ func TasksUpdate(c buffalo.Context) error {
 	if err := c.Bind(&input); err != nil {
 		return err
 	}
-	view, _, ok := parseView(input.View)
-	if !ok {
-		view = ""
+	view, err := viewOrAll(tx, input.View)
+	if err != nil {
+		return err
 	}
 
 	task.Title = strings.TrimSpace(input.Title)
@@ -156,12 +156,17 @@ func TasksToggle(c buffalo.Context) error {
 		return c.Error(http.StatusNotFound, err)
 	}
 
+	view, err := viewOrAll(tx, c.Param("view"))
+	if err != nil {
+		return err
+	}
+
 	task.Completed = !task.Completed
 	if err := tx.Update(task); err != nil {
 		return err
 	}
 
-	return c.Redirect(http.StatusSeeOther, listPath(c.Param("view")))
+	return c.Redirect(http.StatusSeeOther, listPath(view))
 }
 
 // TasksDestroy elimina una tarea.
@@ -173,10 +178,15 @@ func TasksDestroy(c buffalo.Context) error {
 		return c.Error(http.StatusNotFound, err)
 	}
 
+	view, err := viewOrAll(tx, c.Param("view"))
+	if err != nil {
+		return err
+	}
+
 	if err := tx.Destroy(task); err != nil {
 		return err
 	}
 
 	c.Flash().Add("success", "Tarea eliminada.")
-	return c.Redirect(http.StatusSeeOther, listPath(c.Param("view")))
+	return c.Redirect(http.StatusSeeOther, listPath(view))
 }

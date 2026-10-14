@@ -30,12 +30,9 @@ func ModulesCreate(c buffalo.Context) error {
 	}
 
 	if verrs.HasAny() {
-		view, _, _, found, err := resolveView(tx, input.View)
+		view, err := viewOrAll(tx, input.View)
 		if err != nil {
 			return err
-		}
-		if !found {
-			view = ""
 		}
 		c.Set("moduleErrors", verrs)
 		c.Set("moduleName", module.Name)

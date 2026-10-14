@@ -138,3 +138,10 @@ func (as *ActionSuite) Test_ModulesCreate_Invalid_KeepsView() {
 	as.Equal(422, res.Code)
 	as.Contains(res.Body.String(), "<h1>Trabajo</h1>")
 }
+
+func (as *ActionSuite) Test_ModulesCreate_Invalid_UnknownView_FallsBackToAll() {
+	res := as.HTML("/modules").Post(url.Values{"name": {""}, "view": {unknownView}})
+	as.Equal(422, res.Code)
+	as.Contains(res.Body.String(), "El nombre del módulo es obligatorio.")
+	as.Contains(res.Body.String(), "<h1>Tareas</h1>")
+}
