@@ -658,3 +658,105 @@ func (as *ActionSuite) Test_TasksIndex_ToggleAndDeleteFormsCarryView() {
 	as.GreaterOrEqual(strings.Count(body, `name="view" value="`+work.ID.String()+`"`), 3)
 	as.Contains(body, "/tasks/"+task.ID.String()+"/edit?view="+work.ID.String())
 }
+
+// unknownView es un UUID con formato válido que no corresponde a ningún módulo.
+const unknownView = "00000000-0000-4000-8000-000000000000"
+
+func (as *ActionSuite) Test_TasksCreate_UnknownView_Invalid_FallsBackToAll() {
+	res := as.HTML("/tasks").Post(url.Values{"title": {""}, "view": {unknownView}})
+	as.Equal(422, res.Code)
+	body := res.Body.String()
+	as.Contains(body, "El título es obligatorio.")
+	as.Contains(body, "<h1>Tareas</h1>")
+	as.NotContains(body, unknownView)
+
+	count, err := as.DB.Count(&models.Task{})
+	as.NoError(err)
+	as.Equal(0, count)
+}
+
+func (as *ActionSuite) Test_TasksCreate_UnknownView_RedirectsToAll() {
+	res := as.HTML("/tasks").Post(url.Values{"title": {"X"}, "view": {unknownView}})
+	as.Equal(303, res.Code)
+	as.Equal("/", res.Header().Get("Location"))
+
+	count, err := as.DB.Count(&models.Task{})
+	as.NoError(err)
+	as.Equal(1, count)
+}
+
+func (as *ActionSuite) Test_TasksEdit_UnknownView_LinksToAll() {
+	task := as.createTaskIn("X", models.PriorityMedium, uuid.NullUUID{}, time.Time{})
+
+	res := as.HTML("/tasks/%s/edit?view=%s", task.ID, unknownView).Get()
+	as.Equal(200, res.Code)
+	body := res.Body.String()
+	as.Contains(body, `<a href="/" class="back-link">`)
+	as.Contains(body, `<a href="/" class="button">Cancelar</a>`)
+	as.Contains(body, `name="view" value=""`)
+	as.Contains(body, `href="/" class="nav-link" aria-current="page"`)
+	as.NotContains(body, unknownView)
+}
+
+func (as *ActionSuite) Test_TasksUpdate_UnknownView_Invalid_LinksToAll() {
+	task := as.createTaskIn("Original", models.PriorityMedium, uuid.NullUUID{}, time.Time{})
+
+	res := as.HTML("/tasks/%s", task.ID).Put(url.Values{"title": {""}, "view": {unknownView}})
+	as.Equal(422, res.Code)
+	body := res.Body.String()
+	as.Contains(body, "El título es obligatorio.")
+	as.Contains(body, `<a href="/" class="button">Cancelar</a>`)
+	as.NotContains(body, unknownView)
+
+	as.NoError(as.DB.Reload(task))
+	as.Equal("Original", task.Title)
+}
+
+func (as *ActionSuite) Test_TasksUpdate_UnknownView_RedirectsToAll() {
+	task := as.createTaskIn("X", models.PriorityMedium, uuid.NullUUID{}, time.Time{})
+
+	res := as.HTML("/tasks/%s", task.ID).Put(url.Values{"title": {"Nuevo"}, "view": {unknownView}})
+	as.Equal(303, res.Code)
+	as.Equal("/", res.Header().Get("Location"))
+	as.NoError(as.DB.Reload(task))
+	as.Equal("Nuevo", task.Title)
+}
+
+func (as *ActionSuite) Test_TasksToggle_UnknownView_RedirectsToAll() {
+	task := as.createTaskIn("X", models.PriorityMedium, uuid.NullUUID{}, time.Time{})
+
+	res := as.HTML("/tasks/%s/toggle", task.ID).Put(url.Values{"view": {unknownView}})
+	as.Equal(303, res.Code)
+	as.Equal("/", res.Header().Get("Location"))
+	as.NoError(as.DB.Reload(task))
+	as.True(task.Completed)
+}
+
+func (as *ActionSuite) Test_ViewOrAll() {
+	work := as.createModule("Trabajo", time.Time{})
+
+	cases := map[string]string{
+		"":               "",
+		"none":           "none",
+		work.ID.String(): work.ID.String(),
+		unknownView:      "",
+		"abc":            "",
+	}
+	for raw, want := range cases {
+		view, err := viewOrAll(as.DB, raw)
+		as.NoError(err)
+		as.Equal(want, view, "vista %q", raw)
+	}
+}
+
+func (as *ActionSuite) Test_TasksDestroy_UnknownView_RedirectsToAll() {
+	task := as.createTaskIn("X", models.PriorityMedium, uuid.NullUUID{}, time.Time{})
+
+	res := as.HTML("/tasks/%s", task.ID).Post(url.Values{"_method": {"DELETE"}, "view": {unknownView}})
+	as.Equal(303, res.Code)
+	as.Equal("/", res.Header().Get("Location"))
+
+	count, err := as.DB.Count(&models.Task{})
+	as.NoError(err)
+	as.Equal(0, count)
+}

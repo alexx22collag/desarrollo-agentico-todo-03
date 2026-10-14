@@ -155,6 +155,21 @@ func resolveView(tx *pop.Connection, raw string) (view, title string, moduleID u
 	return view, module.Name, moduleID, true, nil
 }
 
+// viewOrAll devuelve la vista normalizada si existe y «Todas» ("") si no es
+// válida o apunta a un módulo inexistente. Solo propaga errores de la base de datos.
+// Úsala en los caminos que reciben la vista oculta de un formulario; el listado
+// (TasksIndex) sigue respondiendo 404 con un módulo inexistente.
+func viewOrAll(tx *pop.Connection, raw string) (string, error) {
+	view, _, _, found, err := resolveView(tx, raw)
+	if err != nil {
+		return "", err
+	}
+	if !found {
+		return "", nil
+	}
+	return view, nil
+}
+
 // newTaskForView devuelve una tarea vacía para el formulario de alta, con el
 // módulo de la vista preseleccionado (ninguno en «Todas» y «Sin módulo»).
 func newTaskForView(view string) *models.Task {
