@@ -1,0 +1,9 @@
+create_table("modules") {
+	t.Column("id", "uuid", {primary: true})
+	t.Column("name", "string", {"size": 50})
+	t.Timestamps()
+}
+sql("CREATE UNIQUE INDEX modules_name_lower_idx ON modules (lower(name))")
+add_column("tasks", "module_id", "uuid", {"null": true})
+sql("ALTER TABLE tasks ADD CONSTRAINT tasks_module_id_fkey FOREIGN KEY (module_id) REFERENCES modules (id)")
+sql("CREATE INDEX tasks_module_id_idx ON tasks (module_id)")

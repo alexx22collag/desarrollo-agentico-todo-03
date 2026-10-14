@@ -430,3 +430,231 @@ func (as *ActionSuite) Test_TasksIndex_ToggleFormCarriesOverrideAndToken() {
 	as.Contains(body, `name="_method" value="PUT"`)
 	as.Contains(body, `name="authenticity_token"`)
 }
+
+func (as *ActionSuite) Test_TasksIndex_FiltersByModule_KeepsPriorityOrder() {
+	base := time.Now().Add(-time.Hour)
+	work := as.createModule("Trabajo", base)
+	personal := as.createModule("Personal", base.Add(time.Second))
+	as.createTaskIn("T baja", models.PriorityLow, inModule(work), base)
+	as.createTaskIn("T alta", models.PriorityHigh, inModule(work), base.Add(time.Second))
+	as.createTaskIn("T media", models.PriorityMedium, inModule(work), base.Add(2*time.Second))
+	as.createTaskIn("P alta", models.PriorityHigh, inModule(personal), base.Add(3*time.Second))
+
+	res := as.HTML("/?module=%s", work.ID).Get()
+	as.Equal(200, res.Code)
+	body := res.Body.String()
+
+	high := strings.Index(body, "T alta")
+	medium := strings.Index(body, "T media")
+	low := strings.Index(body, "T baja")
+	as.True(high >= 0 && medium >= 0 && low >= 0)
+	as.Less(high, medium)
+	as.Less(medium, low)
+	as.NotContains(body, "P alta")
+	as.Contains(body, "<h1>Trabajo</h1>")
+	as.Contains(body, `href="/?module=`+work.ID.String()+`" class="nav-link" aria-current="page"`)
+	as.Contains(body, `<option value="`+work.ID.String()+`" selected>`)
+}
+
+func (as *ActionSuite) Test_TasksIndex_FilterNone() {
+	work := as.createModule("Trabajo", time.Time{})
+	as.createTaskIn("Con módulo", models.PriorityMedium, inModule(work), time.Time{})
+	as.createTaskIn("Sin asignar", models.PriorityMedium, uuid.NullUUID{}, time.Time{})
+
+	res := as.HTML("/?module=none").Get()
+	as.Equal(200, res.Code)
+	body := res.Body.String()
+	as.Contains(body, "Sin asignar")
+	as.NotContains(body, "Con módulo")
+	as.Contains(body, "<h1>Sin módulo</h1>")
+}
+
+func (as *ActionSuite) Test_TasksIndex_UnknownModule_NotFound() {
+	res := as.HTML("/?module=%s", uuid.Must(uuid.NewV4())).Get()
+	as.Equal(404, res.Code)
+}
+
+func (as *ActionSuite) Test_TasksIndex_InvalidModule_NotFound() {
+	res := as.HTML("/?module=abc").Get()
+	as.Equal(404, res.Code)
+}
+
+func (as *ActionSuite) Test_TasksIndex_AllView_PreselectsNoModule() {
+	as.createModule("Trabajo", time.Time{})
+
+	res := as.HTML("/").Get()
+	as.Equal(200, res.Code)
+	as.Contains(res.Body.String(), `<option value="" selected>Sin módulo</option>`)
+}
+
+func (as *ActionSuite) Test_TasksCreate_WithModule() {
+	work := as.createModule("Trabajo", time.Time{})
+
+	res := as.HTML("/tasks").Post(url.Values{"title": {"X"}, "module_id": {work.ID.String()}, "view": {work.ID.String()}})
+	as.Equal(303, res.Code)
+	as.Equal("/?module="+work.ID.String(), res.Header().Get("Location"))
+
+	task := &models.Task{}
+	as.NoError(as.DB.First(task))
+	as.True(task.ModuleID.Valid)
+	as.Equal(work.ID, task.ModuleID.UUID)
+}
+
+func (as *ActionSuite) Test_TasksCreate_FromAllView_StaysInAll() {
+	work := as.createModule("Trabajo", time.Time{})
+
+	res := as.HTML("/tasks").Post(url.Values{"title": {"X"}, "module_id": {work.ID.String()}, "view": {""}})
+	as.Equal(303, res.Code)
+	as.Equal("/", res.Header().Get("Location"))
+}
+
+func (as *ActionSuite) Test_TasksCreate_FromModuleView_OtherModule() {
+	base := time.Now().Add(-time.Hour)
+	a := as.createModule("A", base)
+	b := as.createModule("B", base.Add(time.Second))
+
+	res := as.HTML("/tasks").Post(url.Values{"title": {"X"}, "module_id": {b.ID.String()}, "view": {a.ID.String()}})
+	as.Equal(303, res.Code)
+	as.Equal("/?module="+b.ID.String(), res.Header().Get("Location"))
+}
+
+func (as *ActionSuite) Test_TasksCreate_UnknownModule() {
+	res := as.HTML("/tasks").Post(url.Values{"title": {"X"}, "module_id": {uuid.Must(uuid.NewV4()).String()}})
+	as.Equal(422, res.Code)
+	as.Contains(res.Body.String(), "El módulo no es válido.")
+
+	count, err := as.DB.Count(&models.Task{})
+	as.NoError(err)
+	as.Equal(0, count)
+}
+
+func (as *ActionSuite) Test_TasksCreate_MalformedModule() {
+	res := as.HTML("/tasks").Post(url.Values{"title": {"X"}, "module_id": {"abc"}})
+	as.Equal(422, res.Code)
+	as.Contains(res.Body.String(), "El módulo no es válido.")
+
+	count, err := as.DB.Count(&models.Task{})
+	as.NoError(err)
+	as.Equal(0, count)
+}
+
+func (as *ActionSuite) Test_TasksEdit_PreselectsModule() {
+	work := as.createModule("Trabajo", time.Time{})
+	task := as.createTaskIn("En trabajo", models.PriorityMedium, inModule(work), time.Time{})
+
+	res := as.HTML("/tasks/%s/edit", task.ID).Get()
+	as.Equal(200, res.Code)
+	as.Contains(res.Body.String(), `<option value="`+work.ID.String()+`" selected>`)
+
+	res = as.HTML("/tasks/%s/edit?view=%s", task.ID, work.ID).Get()
+	as.Equal(200, res.Code)
+	as.Contains(res.Body.String(), `<a href="/?module=`+work.ID.String()+`" class="button">Cancelar</a>`)
+}
+
+func (as *ActionSuite) Test_TasksUpdate_ChangesModule() {
+	base := time.Now().Add(-time.Hour)
+	a := as.createModule("A", base)
+	b := as.createModule("B", base.Add(time.Second))
+	task := as.createTaskIn("X", models.PriorityHigh, inModule(a), time.Time{})
+	task.Completed = true
+	as.NoError(as.DB.Update(task))
+
+	res := as.HTML("/tasks/%s", task.ID).Put(url.Values{"title": {"X"}, "module_id": {b.ID.String()}})
+	as.Equal(303, res.Code)
+	as.NoError(as.DB.Reload(task))
+	as.Equal(b.ID, task.ModuleID.UUID)
+	as.Equal(models.PriorityHigh, task.Priority)
+	as.True(task.Completed)
+}
+
+func (as *ActionSuite) Test_TasksUpdate_ClearsModule() {
+	work := as.createModule("Trabajo", time.Time{})
+	task := as.createTaskIn("X", models.PriorityMedium, inModule(work), time.Time{})
+
+	res := as.HTML("/tasks/%s", task.ID).Put(url.Values{"title": {"X"}, "module_id": {""}})
+	as.Equal(303, res.Code)
+	as.NoError(as.DB.Reload(task))
+	as.False(task.ModuleID.Valid)
+}
+
+func (as *ActionSuite) Test_TasksUpdate_WithoutModule_KeepsIt() {
+	work := as.createModule("Trabajo", time.Time{})
+	task := as.createTaskIn("X", models.PriorityMedium, inModule(work), time.Time{})
+
+	res := as.HTML("/tasks/%s", task.ID).Put(url.Values{"title": {"Nuevo"}})
+	as.Equal(303, res.Code)
+	as.NoError(as.DB.Reload(task))
+	as.Equal("Nuevo", task.Title)
+	as.True(task.ModuleID.Valid)
+	as.Equal(work.ID, task.ModuleID.UUID)
+}
+
+func (as *ActionSuite) Test_TasksUpdate_InvalidModule() {
+	work := as.createModule("Trabajo", time.Time{})
+	task := as.createTaskIn("Original", models.PriorityMedium, inModule(work), time.Time{})
+
+	res := as.HTML("/tasks/%s", task.ID).Put(url.Values{"title": {"Nuevo"}, "module_id": {"abc"}})
+	as.Equal(422, res.Code)
+	as.Contains(res.Body.String(), "El módulo no es válido.")
+	as.NoError(as.DB.Reload(task))
+	as.Equal("Original", task.Title)
+	as.Equal(work.ID, task.ModuleID.UUID)
+}
+
+func (as *ActionSuite) Test_TasksToggle_ReturnsToView() {
+	work := as.createModule("Trabajo", time.Time{})
+	task := as.createTaskIn("X", models.PriorityMedium, inModule(work), time.Time{})
+
+	res := as.HTML("/tasks/%s/toggle", task.ID).Put(url.Values{"view": {work.ID.String()}})
+	as.Equal(303, res.Code)
+	as.Equal("/?module="+work.ID.String(), res.Header().Get("Location"))
+	as.NoError(as.DB.Reload(task))
+	as.True(task.Completed)
+	as.Equal(work.ID, task.ModuleID.UUID)
+}
+
+func (as *ActionSuite) Test_TasksToggle_FormPost_ReturnsToView() {
+	work := as.createModule("Trabajo", time.Time{})
+	task := as.createTaskIn("X", models.PriorityHigh, inModule(work), time.Time{})
+
+	res := as.HTML("/tasks/%s/toggle", task.ID).Post(url.Values{"_method": {"PUT"}, "view": {work.ID.String()}})
+	as.Equal(303, res.Code)
+	as.Equal("/?module="+work.ID.String(), res.Header().Get("Location"))
+	as.NoError(as.DB.Reload(task))
+	as.True(task.Completed)
+	as.Equal(work.ID, task.ModuleID.UUID)
+	as.Equal(models.PriorityHigh, task.Priority)
+}
+
+func (as *ActionSuite) Test_TasksDestroy_ReturnsToView() {
+	task := as.createTaskIn("X", models.PriorityMedium, uuid.NullUUID{}, time.Time{})
+
+	res := as.HTML("/tasks/%s", task.ID).Post(url.Values{"_method": {"DELETE"}, "view": {"none"}})
+	as.Equal(303, res.Code)
+	as.Equal("/?module=none", res.Header().Get("Location"))
+
+	count, err := as.DB.Count(&models.Task{})
+	as.NoError(err)
+	as.Equal(0, count)
+}
+
+func (as *ActionSuite) Test_ListPath_RejectsArbitraryValues() {
+	id := uuid.Must(uuid.NewV4())
+	as.Equal("/", listPath(""))
+	as.Equal("/?module=none", listPath("none"))
+	as.Equal("/?module="+id.String(), listPath(id.String()))
+	for _, v := range []string{"//evil.example", "/?module=x", "https://x"} {
+		as.Equal("/", listPath(v))
+	}
+}
+
+func (as *ActionSuite) Test_TasksIndex_ToggleAndDeleteFormsCarryView() {
+	work := as.createModule("Trabajo", time.Time{})
+	task := as.createTaskIn("X", models.PriorityMedium, inModule(work), time.Time{})
+
+	res := as.HTML("/?module=%s", work.ID).Get()
+	as.Equal(200, res.Code)
+	body := res.Body.String()
+	as.GreaterOrEqual(strings.Count(body, `name="view" value="`+work.ID.String()+`"`), 3)
+	as.Contains(body, "/tasks/"+task.ID.String()+"/edit?view="+work.ID.String())
+}

@@ -3,6 +3,8 @@ package models
 import (
 	"strings"
 	"time"
+
+	"github.com/gofrs/uuid"
 )
 
 func (ms *ModelSuite) Test_Task_Create_Valid() {
@@ -176,4 +178,56 @@ func (ms *ModelSuite) Test_Task_ListOrder() {
 		titles = append(titles, t.Title)
 	}
 	ms.Equal([]string{"A1", "A2", "M1", "B1"}, titles)
+}
+
+func (ms *ModelSuite) Test_Task_Module_Optional() {
+	task := &Task{Title: "x"}
+	verrs, err := ms.DB.ValidateAndCreate(task)
+	ms.NoError(err)
+	ms.False(verrs.HasAny())
+
+	reloaded := &Task{}
+	ms.NoError(ms.DB.Find(reloaded, task.ID))
+	ms.False(reloaded.ModuleID.Valid)
+}
+
+func (ms *ModelSuite) Test_Task_Module_Persists() {
+	module := &Module{Name: "Trabajo"}
+	verrs, err := ms.DB.ValidateAndCreate(module)
+	ms.NoError(err)
+	ms.False(verrs.HasAny())
+
+	task := &Task{Title: "x", ModuleID: nullUUID(module)}
+	verrs, err = ms.DB.ValidateAndCreate(task)
+	ms.NoError(err)
+	ms.False(verrs.HasAny())
+
+	reloaded := &Task{}
+	ms.NoError(ms.DB.Find(reloaded, task.ID))
+	ms.True(reloaded.ModuleID.Valid)
+	ms.Equal(module.ID, reloaded.ModuleID.UUID)
+}
+
+func (ms *ModelSuite) Test_Task_Module_Nonexistent_Invalid() {
+	task := &Task{Title: "x", ModuleID: uuid.NullUUID{UUID: uuid.Must(uuid.NewV4()), Valid: true}}
+	verrs, err := ms.DB.ValidateAndCreate(task)
+	ms.NoError(err)
+	ms.Contains(verrs.Get("module_id"), "El módulo no es válido.")
+
+	count, err := ms.DB.Count(&Task{})
+	ms.NoError(err)
+	ms.Equal(0, count)
+}
+
+func (ms *ModelSuite) Test_Task_Module_ForeignKey() {
+	err := ms.DB.Create(&Task{Title: "x", ModuleID: uuid.NullUUID{UUID: uuid.Must(uuid.NewV4()), Valid: true}})
+	ms.Error(err)
+	ms.Contains(err.Error(), "tasks_module_id_fkey")
+}
+
+func (ms *ModelSuite) Test_Task_ModuleValue() {
+	ms.Equal("", Task{}.ModuleValue())
+
+	id := uuid.Must(uuid.NewV4())
+	ms.Equal(id.String(), Task{ModuleID: uuid.NullUUID{UUID: id, Valid: true}}.ModuleValue())
 }

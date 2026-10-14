@@ -25,12 +25,13 @@ const TaskListOrder = "CASE priority WHEN 'alta' THEN 0 WHEN 'media' THEN 1 ELSE
 
 // Task representa una tarea de la lista.
 type Task struct {
-	ID        uuid.UUID `json:"id" db:"id" form:"-"`
-	Title     string    `json:"title" db:"title" form:"title"`
-	Completed bool      `json:"completed" db:"completed" form:"-"`
-	Priority  string    `json:"priority" db:"priority" form:"priority"`
-	CreatedAt time.Time `json:"created_at" db:"created_at" form:"-"`
-	UpdatedAt time.Time `json:"updated_at" db:"updated_at" form:"-"`
+	ID        uuid.UUID     `json:"id" db:"id" form:"-"`
+	Title     string        `json:"title" db:"title" form:"title"`
+	Completed bool          `json:"completed" db:"completed" form:"-"`
+	Priority  string        `json:"priority" db:"priority" form:"priority"`
+	ModuleID  uuid.NullUUID `json:"module_id" db:"module_id" form:"-"`
+	CreatedAt time.Time     `json:"created_at" db:"created_at" form:"-"`
+	UpdatedAt time.Time     `json:"updated_at" db:"updated_at" form:"-"`
 }
 
 // Tasks es una colección de Task.
@@ -47,6 +48,14 @@ func (t Task) PriorityLabel() string {
 		return "Baja"
 	}
 	return t.Priority
+}
+
+// ModuleValue devuelve el identificador del módulo como texto, o "" si la tarea no tiene módulo.
+func (t Task) ModuleValue() string {
+	if !t.ModuleID.Valid {
+		return ""
+	}
+	return t.ModuleID.UUID.String()
 }
 
 // applyDefaultPriority asigna la prioridad media cuando no se indica ninguna.
@@ -85,6 +94,16 @@ func (t *Task) Validate(tx *pop.Connection) (*validate.Errors, error) {
 	case PriorityHigh, PriorityMedium, PriorityLow:
 	default:
 		verrs.Add("priority", "La prioridad no es válida.")
+	}
+
+	if t.ModuleID.Valid {
+		exists, err := tx.Where("id = ?", t.ModuleID.UUID).Exists(&Module{})
+		if err != nil {
+			return verrs, err
+		}
+		if !exists {
+			verrs.Add("module_id", ModuleInvalidMessage)
+		}
 	}
 
 	return verrs, nil

@@ -1,11 +1,12 @@
 <header class="page-header">
-  <a href="/" class="back-link"><span aria-hidden="true">←</span> Volver a la lista</a>
+  <a href="<%= backPath %>" class="back-link"><span aria-hidden="true">←</span> Volver a la lista</a>
   <h1>Editar tarea</h1>
 </header>
 
 <form action="/tasks/<%= task.ID %>" method="POST" class="edit-task">
   <input type="hidden" name="authenticity_token" value="<%= authenticity_token %>">
   <input type="hidden" name="_method" value="PUT">
+  <input type="hidden" name="view" value="<%= view %>">
   <label for="task-title">Título</label>
   <input
     id="task-title"
@@ -28,8 +29,13 @@
   <%= if (len(errors.Get("priority")) > 0) { %>
     <p id="priority-error" class="field-error" role="alert"><%= for (msg) in errors.Get("priority") { %><%= msg %><% } %></p>
   <% } %>
+  <label for="task-module">Módulo</label>
+  <%= partial("tasks/module_select.plush.html") %>
+  <%= if (len(errors.Get("module_id")) > 0) { %>
+    <p id="module-error" class="field-error" role="alert"><%= for (msg) in errors.Get("module_id") { %><%= msg %><% } %></p>
+  <% } %>
   <div class="edit-task-actions">
-    <a href="/" class="button">Cancelar</a>
+    <a href="<%= backPath %>" class="button">Cancelar</a>
     <button type="submit" class="button button-primary">Guardar cambios</button>
   </div>
 </form>
