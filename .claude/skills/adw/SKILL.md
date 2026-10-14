@@ -24,7 +24,9 @@ El trigger no recuerda qué issues ha procesado: vuelve a lanzar cualquier issue
 4. Nunca vuelvas a poner la etiqueta `adw`: la reactivación es decisión del usuario.
 5. No abras el navegador (`cmd //c start`) ni hagas preguntas (`AskUserQuestion`): no hay nadie delante.
 6. **No reconstruyas ni reinicies la app** (`docker compose up/down/restart`): es la instancia que usa el usuario. En `--auto` la Fase 4 se limita a la validación de CI en contenedor; indica en la PR y en la issue que la verificación manual en la app queda pendiente del usuario.
-7. Validación con el comando de contenedor Linux de la Fase 3, escrito como `env MSYS_NO_PATHCONV=1 docker run ...` (es la forma permitida en `.claude/settings.local.json`). Si un comando necesario es denegado por permisos, no busques rodeos: aplica el punto 3 indicando el comando exacto.
+7. **Shell:** en `claude -p` sobre Windows la herramienta disponible suele ser **PowerShell**, no Bash. Ejecuta cada comando en su propia llamada (sin encadenar con `&&` ni `;`), empezando directamente por el programa (`git ...`, `gh ...`, `go ...`, `docker ...`): así coinciden con las reglas de `.claude/settings.local.json`. Validación de CI en contenedor Linux desde PowerShell (sin `env`/`MSYS_NO_PATHCONV`, que son de Bash):
+   `docker run --rm --network desarrollo-agentico-todo-03_default -e GO_ENV=test -e DB_HOST=db -v "${PWD}:/repo:ro" -v todo03-gomod:/go/pkg/mod golang:1.26 bash -c 'cp -r /repo /src && cd /src && git config --global --add safe.directory "*" && git ls-files | while read f; do sed -i "s/\r$//" "$f"; done && gofmt -l . && go vet ./... && go test -p 1 -count=1 ./... && go build ./...'`
+   (antes, `git add -N` de los archivos nuevos). Si un comando necesario es denegado por permisos, no busques rodeos: aplica el punto 3 indicando el comando exacto.
 
 ## Fase 0 — Encargo y rama
 
