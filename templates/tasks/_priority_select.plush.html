@@ -1,0 +1,9 @@
+<select
+  id="task-priority"
+  name="priority"
+  <%= if (len(errors.Get("priority")) > 0) { %>aria-invalid="true" aria-describedby="priority-error"<% } %>
+>
+  <option value="alta"<%= if (task.Priority == "alta") { %> selected<% } %>>Alta</option>
+  <option value="media"<%= if (task.Priority == "media") { %> selected<% } %>>Media</option>
+  <option value="baja"<%= if (task.Priority == "baja") { %> selected<% } %>>Baja</option>
+</select>

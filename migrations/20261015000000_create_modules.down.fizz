@@ -1,0 +1,4 @@
+sql("DROP INDEX IF EXISTS tasks_module_id_idx")
+sql("ALTER TABLE tasks DROP CONSTRAINT IF EXISTS tasks_module_id_fkey")
+drop_column("tasks", "module_id")
+drop_table("modules")

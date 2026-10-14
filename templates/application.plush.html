@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Tareas</title>
-    <link rel="stylesheet" href="/assets/app.css?v=3">
+    <link rel="stylesheet" href="/assets/app.css?v=5">
   </head>
   <body>
     <div class="app-layout">
@@ -13,13 +13,32 @@
           <span>todo<span class="brand-dot" aria-hidden="true">.</span></span>
         </a>
         <nav aria-label="Principal">
-          <a href="/" class="nav-link" aria-current="true">
-            <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
-              <rect x="4" y="4" width="16" height="16" rx="3" />
-              <path d="m8 12 3 3 5-6" />
-            </svg>
-            Tareas
-          </a>
+          <ul class="module-nav">
+            <%= for (item) in sidebarItems { %>
+              <li><a href="<%= item.Href %>" class="nav-link"<%= if (item.Current) { %> aria-current="page"<% } %>><span class="nav-label"><%= item.Label %></span><span class="nav-count"><%= item.Count %><span class="sr-only"> tareas</span></span></a></li>
+            <% } %>
+          </ul>
+          <details class="new-module"<%= if (len(moduleErrors.Get("name")) > 0) { %> open<% } %>>
+            <summary>+ Nuevo módulo</summary>
+            <form action="/modules" method="POST" aria-label="Nuevo módulo">
+              <input type="hidden" name="authenticity_token" value="<%= authenticity_token %>">
+              <input type="hidden" name="view" value="<%= view %>">
+              <label for="module-name">Nombre del módulo</label>
+              <input
+                id="module-name"
+                type="text"
+                name="name"
+                value="<%= moduleName %>"
+                maxlength="50"
+                autocomplete="off"
+                <%= if (len(moduleErrors.Get("name")) > 0) { %>aria-invalid="true" aria-describedby="module-name-error"<% } %>
+              >
+              <button type="submit" class="button button-primary">Crear</button>
+              <%= if (len(moduleErrors.Get("name")) > 0) { %>
+                <p id="module-name-error" class="field-error" role="alert"><%= for (msg) in moduleErrors.Get("name") { %><%= msg %><% } %></p>
+              <% } %>
+            </form>
+          </details>
         </nav>
       </aside>
       <main class="container">
@@ -27,6 +46,6 @@
         <%= yield %>
       </main>
     </div>
-    <script src="/assets/app.js?v=2" defer></script>
+    <script src="/assets/app.js?v=3" defer></script>
   </body>
 </html>

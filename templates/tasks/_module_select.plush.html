@@ -1,0 +1,10 @@
+<select
+  id="task-module"
+  name="module_id"
+  <%= if (len(errors.Get("module_id")) > 0) { %>aria-invalid="true" aria-describedby="module-error"<% } %>
+>
+  <option value=""<%= if (task.ModuleValue() == "") { %> selected<% } %>>Sin módulo</option>
+  <%= for (opt) in moduleOptions { %>
+    <option value="<%= opt.Value %>"<%= if (task.ModuleValue() == opt.Value) { %> selected<% } %>><%= opt.Label %></option>
+  <% } %>
+</select>

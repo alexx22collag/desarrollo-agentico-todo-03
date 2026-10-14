@@ -1,5 +1,5 @@
 <header class="page-header">
-  <h1>Tareas</h1>
+  <h1><%= viewTitle %></h1>
   <p class="list-count">
     <%= len(tasks) %> <%= if (len(tasks) == 1) { %>tarea en tu lista<% } else { %>tareas en tu lista<% } %>
   </p>
@@ -8,7 +8,11 @@
 <section aria-labelledby="list-heading">
   <h2 id="list-heading" class="sr-only">Lista de tareas</h2>
   <%= if (len(tasks) == 0) { %>
-    <p class="empty-state">No hay tareas todavía. Añade la primera con el formulario.</p>
+    <%= if (view == "") { %>
+      <p class="empty-state">No hay tareas todavía. Añade la primera con el formulario.</p>
+    <% } else { %>
+      <p class="empty-state">No hay tareas en este módulo.</p>
+    <% } %>
   <% } else { %>
     <ul class="task-list">
       <%= for (t) in tasks { %>
@@ -16,6 +20,7 @@
           <form action="/tasks/<%= t.ID %>/toggle" method="POST" class="task-toggle" data-task-toggle>
             <input type="hidden" name="authenticity_token" value="<%= authenticity_token %>">
             <input type="hidden" name="_method" value="PUT">
+            <input type="hidden" name="view" value="<%= view %>">
             <button
               type="submit"
               class="task-toggle-button"
@@ -30,11 +35,12 @@
             </button>
           </form>
           <span class="task-title"><%= t.Title %></span>
+          <span class="task-priority task-priority-<%= t.Priority %>"><span class="sr-only">Prioridad: </span><%= t.PriorityLabel() %></span>
           <%= if (t.Completed) { %>
             <span class="task-status">Completada</span>
           <% } %>
           <div class="task-actions">
-            <a href="/tasks/<%= t.ID %>/edit" class="icon-action" aria-label="Editar tarea: <%= t.Title %>" title="Editar tarea">
+            <a href="/tasks/<%= t.ID %>/edit<%= if (view != "") { %>?view=<%= view %><% } %>" class="icon-action" aria-label="Editar tarea: <%= t.Title %>" title="Editar tarea">
               <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
                 <path d="m15 5 4 4M4 20l4-1L20 7a2.8 2.8 0 0 0-4-4L4 15l-1 6Z" />
               </svg>
@@ -42,6 +48,7 @@
             <form action="/tasks/<%= t.ID %>" method="POST" data-confirm="¿Seguro que quieres eliminar esta tarea?">
               <input type="hidden" name="authenticity_token" value="<%= authenticity_token %>">
               <input type="hidden" name="_method" value="DELETE">
+              <input type="hidden" name="view" value="<%= view %>">
               <button type="submit" class="icon-action icon-danger" aria-label="Eliminar tarea: <%= t.Title %>" title="Eliminar tarea">
                 <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
                   <path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v5M14 11v5" />
@@ -57,6 +64,7 @@
 
 <form action="/tasks" method="POST" class="new-task" aria-label="Añadir tarea">
   <input type="hidden" name="authenticity_token" value="<%= authenticity_token %>">
+  <input type="hidden" name="view" value="<%= view %>">
   <div class="new-task-row">
     <span class="add-mark" aria-hidden="true">+</span>
     <label for="task-title" class="sr-only">Nueva tarea</label>
@@ -68,13 +76,23 @@
       placeholder="Añadir una tarea…"
       maxlength="200"
       autocomplete="off"
-      <%= if (errors.HasAny()) { %>autofocus aria-invalid="true" aria-describedby="title-error"<% } %>
+      <%= if (len(errors.Get("title")) > 0) { %>autofocus aria-invalid="true" aria-describedby="title-error"<% } %>
     >
+    <label for="task-priority" class="sr-only">Prioridad</label>
+    <%= partial("tasks/priority_select.plush.html") %>
+    <label for="task-module" class="sr-only">Módulo</label>
+    <%= partial("tasks/module_select.plush.html") %>
     <button type="submit" class="button button-primary">Añadir</button>
   </div>
-  <%= if (errors.HasAny()) { %>
+  <%= if (len(errors.Get("title")) > 0) { %>
     <p id="title-error" class="field-error" role="alert">
       <%= for (msg) in errors.Get("title") { %><%= msg %><% } %>
     </p>
+  <% } %>
+  <%= if (len(errors.Get("priority")) > 0) { %>
+    <p id="priority-error" class="field-error" role="alert"><%= for (msg) in errors.Get("priority") { %><%= msg %><% } %></p>
+  <% } %>
+  <%= if (len(errors.Get("module_id")) > 0) { %>
+    <p id="module-error" class="field-error" role="alert"><%= for (msg) in errors.Get("module_id") { %><%= msg %><% } %></p>
   <% } %>
 </form>
